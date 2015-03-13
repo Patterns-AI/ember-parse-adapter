@@ -150,11 +150,13 @@ EmberParseAdapter.Serializer = DS.RESTSerializer.extend({
     var belongsTo = snapshot.belongsTo(key);
     var belongsToId = snapshot.belongsTo(key, { id: true });
 
-    json[key] = {
-      "__type": "Pointer",
-      "className": this.parseClassName(belongsTo.typeKey),
-      "objectId": belongsToId
-    };
+    if (!Ember.isEmpty(belongsToId)) {
+      json[key] = {
+        "__type": "Pointer",
+        "className": this.parseClassName(belongsTo.typeKey),
+        "objectId": belongsToId
+      };
+    }
   },
 
   parseClassName: function(key) {
