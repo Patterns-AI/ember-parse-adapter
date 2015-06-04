@@ -4,25 +4,25 @@ var EmberParseAdapter = {};
 EmberParseAdapter.Transforms = {};
 
 /*
-  Serializer to assure proper Parse-to-Ember encodings
-*/
+ * Serializer to assure proper Parse-to-Ember encodings
+ */
 EmberParseAdapter.Serializer = DS.RESTSerializer.extend({
 
   primaryKey: "objectId",
 
   extractArray: function(store, primaryType, payload){
     var namespacedPayload = {};
-    namespacedPayload[Ember.String.pluralize(primaryType.typeKey)] = payload.results;
+    namespacedPayload[Ember.String.pluralize(primaryType.modelName)] = payload.results;
     return this._super(store, primaryType, namespacedPayload);
   },
 
   extractSingle: function(store, primaryType, payload, recordId){
     var namespacedPayload = {};
-    namespacedPayload[primaryType.typeKey] = payload; // this.normalize(primaryType, payload);
+    namespacedPayload[primaryType.modelName] = payload; // this.normalize(primaryType, payload);
     return this._super(store, primaryType, namespacedPayload, recordId);
   },
 
-  typeForRoot: function(key) {
+  modelNameFromPayloadKey: function(key) {
     return Ember.String.dasherize(Ember.String.singularize(key));
   },
 
@@ -77,7 +77,24 @@ EmberParseAdapter.Serializer = DS.RESTSerializer.extend({
 
       // Handle the belongsTo relationships
       if(hash[key] && relationship.kind === 'belongsTo'){
-        hash[key] = hash[key].objectId;
+        // When items are pointers we just need the id
+        // This occurs when request was made without the include query param
+        if(hash[key].__type === "Pointer"){
+          hash[key] = hash[key].objectId;
+        } else {
+          if(hash[key].__type === "Object"){
+            // When items are objects we need to clean them and add them to the store.
+            // This occurs when request was made with the include query param.
+            delete hash[key].__type;
+            delete hash[key].className;
+            hash[key].type = relationship.type;
+            serializer.normalize(relationship.type, hash[key]);
+            store.push(relationship.type, hash[key]);
+          } else {
+            // Unknown or {"__op": "Delete"} due to a previous delete operation 
+            delete hash[key];
+          }
+        }
       }
 
       // Handle the hasMany relationships
@@ -95,7 +112,7 @@ EmberParseAdapter.Serializer = DS.RESTSerializer.extend({
           // ember-data expects the link to be a string
           // The adapter findHasMany will parse it
           if (!hash.links) hash.links = {};
-          hash.links[key] = JSON.stringify({typeKey: relationship.type.typeKey, key: key});
+          hash.links[key] = JSON.stringify({modelName: relationship.type.modelName, key: key});
         }
 
         if(options.array){
@@ -111,11 +128,8 @@ EmberParseAdapter.Serializer = DS.RESTSerializer.extend({
                 // This occurs when request was made with the include query param.
                 delete item.__type;
                 delete item.className;
-                item.id = item.objectId;
-                delete item.objectId;
                 item.type = relationship.type;
-                serializer.normalizeAttributes(relationship.type, item);
-                serializer.normalizeRelationships(relationship.type, item);
+                serializer.normalize(relationship.type, item);
                 store.push(relationship.type, item);
               }
             });
@@ -153,14 +167,16 @@ EmberParseAdapter.Serializer = DS.RESTSerializer.extend({
     if (!Ember.isEmpty(belongsToId)) {
       json[key] = {
         "__type": "Pointer",
-        "className": this.parseClassName(belongsTo.typeKey),
+        "className": this.parseClassName(belongsTo.modelName),
         "objectId": belongsToId
       };
+    } else {
+      json[key] = {"__op": "Delete"};
     }
   },
 
   parseClassName: function(key) {
-    if (key === "parseUser") {
+    if (key === "parse-user") {
       return "_User";
     } else {
       return Ember.String.capitalize(Ember.String.camelize(key));
@@ -242,16 +258,18 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
       "X-Parse-REST-API-Key": this.get('restApiId')
     });
   },
-
+    
   host: "https://api.parse.com",
   namespace: '1',
   classesPath: 'classes',
 
   pathForType: function(type) {
-    if ("parseUser" === type) {
+    if ("parse-user" === type) {
       return "users";
     } else if ("login" === type) {
       return "login";
+    } else if ("logout" === type) {
+      return "logout";
     } else if ("requestPasswordReset" === type) {
       return "requestPasswordReset";
     } else if ("function" === type) {
@@ -273,16 +291,12 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
    * properties onto existing data so that the record maintains
    * latest data.
    */
-  createRecord: function(store, type, record) {
-    var data = {};
-    var serializer = store.serializerFor(type.typeKey);
-
-    var snapshot = record._createSnapshot();
-    serializer.serializeIntoHash(data, type, snapshot, { includeId: true });
+  createRecord: function(store, type, snapshot) {
+    var data = this.serialize(snapshot, { includeId: true });
 
     var adapter = this;
     return new Ember.RSVP.Promise(function(resolve, reject){
-      adapter.ajax(adapter.buildURL(type.typeKey), "POST", { data: data }).then(
+      adapter.ajax(adapter.buildURL(type.modelName), "POST", { data: data }).then(
       function(json){
         var completed = Ember.merge(data, json);
         resolve(completed);
@@ -299,20 +313,17 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
    * properties onto existing data so that the record maintains
    * latest data.
    */
-  updateRecord: function(store, type, record) {
-    var data = {};
+  updateRecord: function(store, type, snapshot) {
+    var data = this.serialize(snapshot, { includeId: true });
+    
     var deleteds = {};
     var sendDeletes = false;
-    var serializer = store.serializerFor(type.typeKey);
 
-    var snapshot = record._createSnapshot();
-    serializer.serializeIntoHash(data, type, snapshot, { includeId: true });
-
-    var id = record.get('id');
+    var id = snapshot.id;
     var adapter = this;
 
     // remove the password if we're updating a user
-    if(type.typeKey === 'parseUser') {
+    if(type.modelName === 'parseUser') {
       delete data.password;
     }
 
@@ -326,9 +337,9 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
 
     return new Ember.RSVP.Promise(function(resolve, reject) {
       if(sendDeletes){
-          adapter.ajax(adapter.buildURL(type.typeKey, id), "PUT", {data: deleteds}).then(
+          adapter.ajax(adapter.buildURL(type.modelName, id), "PUT", {data: deleteds}).then(
             function(json){
-              adapter.ajax(adapter.buildURL(type.typeKey, id), "PUT", { data: data }).then(
+              adapter.ajax(adapter.buildURL(type.modelName, id), "PUT", { data: data }).then(
                 function(updates){
                   // This is the essential bit - merge response data onto existing data.
                   var completed = Ember.merge(data, updates);
@@ -344,7 +355,7 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
             }
           );
       } else {
-        adapter.ajax(adapter.buildURL(type.typeKey, id), "PUT", { data: data }).then(function(json){
+        adapter.ajax(adapter.buildURL(type.modelName, id), "PUT", { data: data }).then(function(json){
           // This is the essential bit - merge response data onto existing data.
           var completed = Ember.merge(data, json);
           resolve(completed);
@@ -356,7 +367,7 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
   },
 
   parseClassName: function(key) {
-    if (key === "parseUser") {
+    if (key === "parse-user") {
       return "_User";
     } else {
       return Ember.String.capitalize(Ember.String.camelize(key));
@@ -367,7 +378,7 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
    * Implementation of a hasMany that provides a Relation query for Parse
    * objects.
    */
-  findHasMany: function(store, record, relatedInfo){    
+  findHasMany: function(store, snapshot, relatedInfo){    
     var relatedInfo_ = JSON.parse(relatedInfo);
 
     var query = {
@@ -375,16 +386,16 @@ EmberParseAdapter.Adapter = DS.RESTAdapter.extend({
         "$relatedTo": {
           "object": {
             "__type": "Pointer",
-            "className": this.parseClassName(record.typeKey || record.constructor.typeKey),
-            "objectId": record.get('id')
+            "className": this.parseClassName(snapshot.modelName),
+            "objectId": snapshot.id
           },
           key: relatedInfo_.key
         }
       }
     };
-    // the request is to the related type and not the type for the record.
+    // the request is to the related type and not the type for the snapshot.
     // the query is where there is a pointer to this record.
-    return this.ajax(this.buildURL(relatedInfo_.typeKey), "GET", { data: query });
+    return this.ajax(this.buildURL(relatedInfo_.modelName), "GET", { data: query });
   },
 
   /**
@@ -452,14 +463,14 @@ EmberParseAdapter.ParseUser = DS.Model.extend({
 EmberParseAdapter.ParseUser.reopenClass({
 
   current: function(store, data) {
-    if(Ember.isEmpty(this.typeKey)) {
+    if(Ember.isEmpty(this.modelName)) {
       throw new Error('ParseUser.current must be called on a model fetched via store.modelFor');
     }
 
     var model = this;
     var adapter = store.adapterFor(model);
     var serializer = store.serializerFor(model);
-    return adapter.ajax(adapter.buildURL("parseUser", "me"), "GET", {}).then(function(response) {
+    return adapter.ajax(adapter.buildURL("parse-user", "me"), "GET", {}).then(function(response) {
       serializer.normalize(model, response);
       return store.push(model, response);
     }, function(response) {
@@ -479,7 +490,7 @@ EmberParseAdapter.ParseUser.reopenClass({
   },
 
   login: function(store, data){
-    if(Ember.isEmpty(this.typeKey)){
+    if(Ember.isEmpty(this.modelName)){
       throw new Error('Parse login must be called on a model fetched via store.modelFor');
     }
     var model = this;
@@ -497,14 +508,28 @@ EmberParseAdapter.ParseUser.reopenClass({
     );
   },
 
+  logout: function(store){
+    if(Ember.isEmpty(this.modelName)){
+      throw new Error('Parse login must be called on a model fetched via store.modelFor');
+    }
+    var model = this;
+    var adapter = store.adapterFor(model);
+    var serializer = store.serializerFor(model);
+    return adapter.ajax(adapter.buildURL("logout"), "POST")['catch'](
+      function(response){
+        return Ember.RSVP.reject(response.responseJSON);
+      }
+    );
+  },
+
   signup: function(store, data){
-    if(Ember.isEmpty(this.typeKey)){
+    if(Ember.isEmpty(this.modelName)){
       throw new Error('Parse signup must be called on a model fetched via store.modelFor');
     }
     var model = this;
     var adapter = store.adapterFor(model);
     var serializer = store.serializerFor(model);
-    return adapter.ajax(adapter.buildURL(model.typeKey), "POST", {data: data}).then(
+    return adapter.ajax(adapter.buildURL(model.modelName), "POST", {data: data}).then(
       function(response){
         serializer.normalize(model, response);
         response.email = response.email || data.email;
