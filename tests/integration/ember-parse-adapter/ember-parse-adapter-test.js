@@ -25,7 +25,8 @@ module( "Integration - ember-parse-adapter", {
       firstName       : DS.attr( "string"),
       lastName        : DS.attr( "string"),
       updateMe        : DS.attr( "boolean", { defaultValue: false } ), // used to test merge operations of the adapter
-      errorMe         : DS.attr( "number", { defaultValue: 0 } ), // used to test error on operations on the adapter
+      saveMeError     : DS.attr( "number", { defaultValue: 0 } ), // used to test error on operations on the adapter
+      deleteMeError   : DS.attr( "number", { defaultValue: 0 } ), // used to test error on operations on the adapter
       unreadComments  : DS.hasMany( "comment", { relation: false, array: true, async: true } )
     }));
 
@@ -223,7 +224,10 @@ var insertData = function() {
 };
 
 
-test( "create", function( assert ) {
+/**
+ * @description create
+ */
+test("create", function(assert) {
   assert.expect(67);
 
   // there is nothing into the database
@@ -321,7 +325,10 @@ test( "create", function( assert ) {
 });
 
 
-test( "create - merge", function( assert ) {
+/**
+ * @description create - merge
+ */
+test("create - merge", function(assert) {
   assert.expect(6);
 
   // update some data and save them
@@ -352,7 +359,10 @@ test( "create - merge", function( assert ) {
 });
 
 
-test( "update", function( assert ) {
+/**
+ * @description update
+ */
+test("update", function(assert) {
   assert.expect(6);
 
   // create the data
@@ -393,7 +403,10 @@ test( "update", function( assert ) {
 });
 
 
-test( "update - merge", function( assert ) {
+/**
+ * @description update - merge
+ */
+test("update - merge", function(assert) {
   assert.expect(6);
 
   // create the data
@@ -423,7 +436,10 @@ test( "update - merge", function( assert ) {
 });
 
 
-test( "delete", function( assert ) {
+/**
+ * @description delete
+ */
+test("delete", function(assert) {
   assert.expect(4);
 
   // create the data
@@ -466,7 +482,10 @@ test( "delete", function( assert ) {
 });
 
 
-test( "findRecord/findAll/query", function( assert ) {
+/**
+ * @description findRecord/findAll/query
+ */
+test("findRecord/findAll/query", function(assert) {
   assert.expect(16);
 
   // create the data
@@ -532,7 +551,10 @@ test( "findRecord/findAll/query", function( assert ) {
 });
 
 
-test( "belongsTo", function( assert ) {
+/**
+ * @description belongsTo
+ */
+test("belongsTo", function(assert) {
   assert.expect(7);
 
   // create the data
@@ -577,7 +599,10 @@ test( "belongsTo", function( assert ) {
 });
 
 
-test( "relation", function( assert ) {
+/**
+ * @description relation
+ */
+test("relation", function(assert) {
   assert.expect(10);
 
   // create the data
@@ -685,7 +710,10 @@ test( "relation", function( assert ) {
 });
 
 
-test( "array", function( assert ) {
+/**
+ * @description array
+ */
+test("array", function(assert) {
   assert.expect(14);
 
   // create the data
@@ -762,13 +790,16 @@ test( "array", function( assert ) {
 });
 
 
-test( "Save error", function( assert ) {
+/**
+ * @description Save error
+ */
+test("Save error", function(assert) {
   assert.expect(3);
 
   andThen(function() {
     Ember.run(function() {
       author1 = createAuthor(0);
-      author1.set("errorMe", 223);
+      author1.set("saveMeError", 223);
 
       author1.save().catch(function(error) {
         assert.ok(error && error.error, "custom error returned");
@@ -776,6 +807,32 @@ test( "Save error", function( assert ) {
         var error_obj = JSON.parse(error.error);
         assert.ok(error_obj.code, 223, "error code is good");
         assert.ok(error_obj.message, "I am raised", "error message is good");
+      });
+    });
+  });
+});
+
+
+/**
+ * @description Delete error
+ */
+test("Delete error", function(assert) {
+  assert.expect(3);
+
+  andThen(function() {
+    Ember.run(function() {
+      author1 = createAuthor(0);
+      author1.set("deleteMeError", 223);
+
+      author1.save().then(function() {
+
+        author1.destroyRecord().catch(function(error) {
+          assert.ok(error && error.error, "custom error returned");
+
+          var error_obj = JSON.parse(error.error);
+          assert.ok(error_obj.code, 223, "error code is good");
+          assert.ok(error_obj.message, "I am raised", "error message is good");
+        });
       });
     });
   });

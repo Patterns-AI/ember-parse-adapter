@@ -40,10 +40,8 @@ export default DS.RESTAdapter.extend({
   },
 
   normalizeErrorResponse: function(status, headers, payload) {
-    if (payload && typeof payload === "object") {
-      if (payload.errors) {
-        return payload.errors;
-      }
+    if (payload && typeof payload === "object" && payload.errors) {
+      return payload.errors;
     }
 
     return [payload];
@@ -140,6 +138,20 @@ export default DS.RESTAdapter.extend({
       }
     });
   },
+
+
+  /**
+   * @function deleteRecord
+   * @description Override deleteRecord to correctly return the error from Parse in case of failure
+   */
+  deleteRecord: function (store, type, snapshot) {
+    return this._super(store, type, snapshot)["catch"] (
+      function(response) {
+        return Ember.RSVP.reject(response.errors[0]);
+      }
+    );
+  },
+
 
   parseClassName: function ( key ) {
     return Ember.String.capitalize( key );

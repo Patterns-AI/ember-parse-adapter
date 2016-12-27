@@ -4,7 +4,6 @@ import startApp from "../../helpers/start-app";
 import deleteUser from "../../helpers/fixtures/delete-user";
 
 var get = Ember.get;
-var set = Ember.set;
 var store;
 var adapter;
 var ParseUser;
@@ -53,7 +52,7 @@ test("All operations", function( assert ) {
     }).then( function( user ) {
       userIds.push({
         id: get( user, "id"),
-        sessionToken: get( user, "sessionToken"),
+        sessionToken: get( user, "sessionToken" ),
         username: "clintjhill",
         password: "loveyouall"
       });

@@ -12,7 +12,7 @@ import DS from "ember-data";
  * }
  *
  * This helper deserializes that structure into a normal
- * JavaScript date object. In also performs the inverse:
+ * JavaScript date object. It also performs the inverse:
  * converting a date object back into Parse's custom format.
  *
  * @class DS.Transforms.Data
