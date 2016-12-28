@@ -131,9 +131,14 @@ export default DS.RESTAdapter.extend({
 
     type.eachRelationship(function( key ) {
       if ( data[key] && data[key]._batch_ops ) {
+        hasBatchOps = true;
         batch_ops[key] = data[key]._batch_ops;
         delete data[key]._batch_ops;
-        hasBatchOps = true;
+
+        // see "serializeHasMany", when we keep only the objects that are not removed
+        if (Ember.isEmpty(data[key].objects)) {
+          data[key] = null;
+        }
       }
     });
 

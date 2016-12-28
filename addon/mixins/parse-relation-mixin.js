@@ -54,17 +54,20 @@ export default Ember.Mixin.create({
   * @description Definitely remove the deleted models from their relations
   */
   didUpdate: function() {
-    var _deleted = this.get("_deleted");
+    var deleted = this.get("_deleted");
 
-    for (var key in _deleted) {
-      var deleted_items = Ember.A(_deleted[key]);
+    for (var key in deleted) {
+      var relation = this.get(key);
+      var deleted_items = Ember.A(deleted[key]);
 
-      for (var i = 0; i < deleted_items.length; i++) {
-        var item = this.get(key).findBy("id", deleted_items[i].objectId);
-        this.get(key).removeObject(item);
+      if (!Ember.isNone(relation)) {
+        for (var i = 0; i < deleted_items.length; i++) {
+          var item = relation.findBy("id", deleted_items[i].objectId);
+          relation.removeObject(item);
+        }
       }
 
-      _deleted[key] = [];
+      deleted[key] = [];
     }
   }
 });
