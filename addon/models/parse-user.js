@@ -24,6 +24,10 @@ var ParseUser = DS.Model.extend({
 /***************************************************************************/
 
 ParseUser.reopenClass({
+  /**
+  * @function requestPasswordReset
+  * @description Requesting A Password Reset
+  */
   requestPasswordReset: function(store, email) {
     var adapter = store.adapterFor("parse-user"),
         data    = {email: email};
@@ -35,6 +39,11 @@ ParseUser.reopenClass({
     );
   },
 
+
+  /**
+  * @function login
+  * @description Logging In
+  */
   login: function(store, data) {
     var model      = this,
         adapter    = store.adapterFor("parse-user"),
@@ -56,6 +65,11 @@ ParseUser.reopenClass({
     );
   },
 
+
+  /**
+  * @function logout
+  * @description Logging Out
+  */
   logout: function(store) {
     var adapter = store.adapterFor("parse-user");
 
@@ -66,6 +80,11 @@ ParseUser.reopenClass({
     );
   },
 
+
+  /**
+  * @function me
+  * @description Retrieving Current User
+  */
   me: function(store) {
     var model      = this,
         adapter    = store.adapterFor("parse-user"),
@@ -87,6 +106,11 @@ ParseUser.reopenClass({
     );
   },
 
+
+  /**
+  * @function signup
+  * @description Signing Up
+  */
   signup: function(store, data) {
     var model      = this,
         adapter    = store.adapterFor("parse-user"),

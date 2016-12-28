@@ -19,6 +19,9 @@ import DS from "ember-data";
  */
 export default DS.Transform.extend({
 
+  /**
+  * @function deserialize
+  */
   deserialize: function( serialized ) {
     if ( !serialized ) {
       return null;
@@ -31,6 +34,10 @@ export default DS.Transform.extend({
     return new Date( serialized );
   },
 
+
+  /**
+  * @function serialize
+  */
   serialize: function( deserialized ) {
     if ( !deserialized ) {
       return null;
@@ -41,5 +48,4 @@ export default DS.Transform.extend({
       iso    : deserialized.toISOString()
     };
   }
-
 });

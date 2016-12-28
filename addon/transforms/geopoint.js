@@ -31,6 +31,9 @@ import GeoPoint from "./geopoint";
  */
 export default DS.Transform.extend({
 
+  /**
+  * @function deserialize
+  */
   deserialize: function( serialized ) {
     if ( !serialized ) {
       return null;
@@ -42,6 +45,10 @@ export default DS.Transform.extend({
     });
   },
 
+
+  /**
+  * @function serialize
+  */
   serialize: function( deserialized ) {
     if ( !deserialized ) {
       return null;
@@ -53,5 +60,4 @@ export default DS.Transform.extend({
       longitude : deserialized.get( "longitude" )
     };
   }
-
 });
