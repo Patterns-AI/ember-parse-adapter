@@ -8,10 +8,16 @@ export default DS.RESTSerializer.extend({
 
   primaryKey: "objectId",
 
+
+  /**
+  * @function normalizeArrayResponse
+  * @description Overrides ember-data function.
+  */
   normalizeArrayResponse: function( store, primaryType, payload ) {
     var namespacedPayload = {};
     namespacedPayload[ Ember.String.pluralize( primaryType.modelName ) ] = payload.results;
 
+    // get the count metadata sent by parse-server if needed
     if ( payload.hasOwnProperty("count") ) {
       namespacedPayload.meta = { count: payload.count };
     }
@@ -19,6 +25,11 @@ export default DS.RESTSerializer.extend({
     return this._super( store, primaryType, namespacedPayload );
   },
 
+
+  /**
+  * @function normalizeSingleResponse
+  * @description Overrides ember-data function.
+  */
   normalizeSingleResponse: function( store, primaryType, payload, recordId ) {
     var namespacedPayload = {};
     namespacedPayload[ primaryType.modelName ] = payload; // this.normalize(primaryType, payload);
@@ -26,44 +37,59 @@ export default DS.RESTSerializer.extend({
     return this._super( store, primaryType, namespacedPayload, recordId );
   },
 
+
+  /**
+  * @function modelNameFromPayloadKey
+  * @description Overrides ember-data function.
+  */
   modelNameFromPayloadKey: function( key ) {
     return Ember.String.dasherize( Ember.String.singularize( key ) );
   },
 
+
   /**
-  * Because Parse only returns the updatedAt/createdAt values on updates
-  * we have to intercept it here to assure that the adapter knows which
-  * record ID we are dealing with (using the primaryKey).
+  * @function normalizeResponse
+  * @description Overrides ember-data function. Because parse-server only
+  * returns the updatedAt/createdAt values on updates we have to intercept it
+  * here to assure that the adapter knows which record ID we are dealing with
+  * (using the primaryKey).
   */
   normalizeResponse: function( store, primaryModelClass, payload, id, requestType ) {
-    if( id !== null && ( "updateRecord" === requestType || "deleteRecord" === requestType ) ) {
+    if( (id !== null) && ( requestType === "updateRecord" || requestType === "deleteRecord" ) ) {
       payload[ this.get( "primaryKey" ) ] = id;
     }
 
     return this._super( store, primaryModelClass, payload, id, requestType );
   },
 
+
   /**
-  * Special handling for the Date objects inside the properties of
-  * Parse responses.
+  * @function normalizeAttributes
+  * @description Overrides ember-data function. Special handling for the Date
+  * objects inside the properties of parse-server responses.
   */
   normalizeAttributes: function( type, hash ) {
     type.eachAttribute( function( key, meta ) {
-      if ( "date" === meta.type && "object" === Ember.typeOf( hash[key] ) && hash[key].iso ) {
-        hash[key] = hash[key].iso; //new Date(hash[key].iso).toISOString();
+      if ( meta.type === "date" && Ember.typeOf( hash[key] ) === "object" && hash[key].iso ) {
+        hash[key] = hash[key].iso;
       }
     });
 
     this._super( type, hash );
   },
 
+
+  /**
+  * @function extractRelationship
+  * @description Overrides ember-data function.
+  */
   extractRelationship: function(relationshipModelName, relationshipHash) {
     if (Ember.isNone(relationshipHash)) { return null; }
-    /*
-      When `relationshipHash` is an object it usually means that the relationship
-      is polymorphic. It could however also be embedded resources that the
-      EmbeddedRecordsMixin has be able to process.
-    */
+
+    // When `relationshipHash` is an object it usually means that the relationship
+    // is polymorphic. It could however also be embedded resources that the
+    // EmbeddedRecordsMixin has be able to process.
+
     if (Ember.typeOf(relationshipHash) === "object") {
       if (relationshipHash.__type) {
         if (relationshipHash.__type === "Pointer") {
@@ -80,7 +106,7 @@ export default DS.RESTSerializer.extend({
           return { id: relationshipHash.objectId, type: relationshipModelName };
         }
       }
-      // {"__op": "Delete"} due to a previous delete operation (ignore it)
+      // {"__op": "Delete"} due to a previous delete operation
       else if (relationshipHash.__op) {
         return null;
       }
@@ -93,6 +119,11 @@ export default DS.RESTSerializer.extend({
     return { id: coerceId, type: relationshipModelName };
   },
 
+
+  /**
+  * @function extractRelationships
+  * @description Overrides ember-data function.
+  */
   extractRelationships: function(modelClass, resourceHash) {
     let relationships = {};
 
@@ -106,22 +137,23 @@ export default DS.RESTSerializer.extend({
 
         if (relationshipMeta.kind === "belongsTo") {
           data = this.extractRelationship(relationshipMeta.type, relationshipHash);
-        } 
-        else if (relationshipHash && relationshipMeta.kind === 'hasMany') {
-          // Parse returns the array in relationshipHash.objects
-          data = Ember.A(relationshipHash.objects).map(function(item) {
-            return this.extractRelationship(relationshipMeta.type, item);
-          }, this);
+          relationship = { data : data };
         }
-        relationship = { data };
-      }
 
-      let linkKey = this.keyForLink(key, relationshipMeta.kind);
-      
-      if (resourceHash.links && resourceHash.links.hasOwnProperty(linkKey)) {
-        let related = resourceHash.links[linkKey];
-        relationship = relationship || {};
-        relationship.links = { related };
+        else if (relationshipHash && relationshipMeta.kind === "hasMany") {
+          if ( relationshipMeta.options.array && relationshipHash.length ) {
+            data = Ember.A(relationshipHash).map(function(item) {
+              return this.extractRelationship(relationshipMeta.type, item);
+            }, this);
+            relationship = { data : data };
+          }
+
+          else if ( relationshipMeta.options.relation ) {
+            var related = { key: relationshipKey };
+            relationship = relationship || {};
+            relationship.links = { related : JSON.stringify(related) }; // see adapter: findHasMany will parse it
+          }
+        }
       }
 
       if (relationship) {
@@ -132,28 +164,45 @@ export default DS.RESTSerializer.extend({
     return relationships;
   },
 
+
+  /**
+  * @function serializeIntoHash
+  * @description Overrides ember-data function.
+  */
   serializeIntoHash: function( hash, typeClass, snapshot, options ) {
     Ember.merge( hash, this.serialize( snapshot, options ) );
   },
 
-  serializeAttribute: function( snapshot, json, key, attribute ) {
-    // These are Parse reserved properties and we won't send them.
-    if ( 'createdAt' === key ||
-         'updatedAt' === key ||
-         'emailVerified' === key ||
-         'sessionToken' === key
-    ) {
-      delete json[key];
 
-    } else {
+  /**
+  * @function serializeAttribute
+  * @description Overrides ember-data function.
+  */
+  serializeAttribute: function( snapshot, json, key, attribute ) {
+    // These are parse-server or internal reserved properties and we won't send them.
+    if ( "createdAt" === key ||
+         "updatedAt" === key ||
+         "emailVerified" === key ||
+         "sessionToken" === key ||
+         "_removed" === key )
+    {
+      delete json[key];
+    }
+    else {
       this._super( snapshot, json, key, attribute );
     }
   },
 
+
+  /**
+  * @function serializeBelongsTo
+  * @description Overrides ember-data function.
+  */
   serializeBelongsTo: function(snapshot, json, relationship) {
     var key         = relationship.key,
         belongsToId = snapshot.belongsTo(key, { id: true });
 
+    // serialize the relation
     if (belongsToId) {
       json[key] = {
         "__type"    : "Pointer",
@@ -161,19 +210,32 @@ export default DS.RESTSerializer.extend({
         "objectId"  : belongsToId
       };
     }
+    // send a delete operation as the relation was removed
     else {
       json[key] = {"__op": "Delete"};
     }
   },
 
+
+  /**
+  * @function parseClassName
+  * @description Overrides ember-data function.
+  */
   parseClassName: function(key) {
+    // handle the specific cases like for User class
     if ("parseUser" === key || "parse-user" === key) {
       return "_User";
-    } else {
+    }
+    else {
       return Ember.String.capitalize(Ember.String.camelize(key));
     }
   },
 
+
+  /**
+  * @function serializeHasMany
+  * @description Overrides ember-data function.
+  */
   serializeHasMany: function( snapshot, json, relationship ) {
     var key   = relationship.key,
       hasMany = Ember.A(snapshot.hasMany( key )),

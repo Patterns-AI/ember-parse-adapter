@@ -208,6 +208,7 @@ export default DS.RESTAdapter.extend({
     return this.ajax( this.buildURL( relationship.type ), "GET", { data: query } );
   },
 
+
   /**
   * @function query
   * @description Overrides ember-data function. Implementation of findQuery that
