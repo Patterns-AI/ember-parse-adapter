@@ -137,36 +137,32 @@ export default DS.RESTAdapter.extend({
       }
     });
 
-    return new Ember.RSVP.Promise( function( resolve, reject ) {
-      if ( sendDeletes ) {
-        adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: deleteds } ).then(
-          function() {
-            adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: data } ).then(
-              function( updates ) {
-                // This is the essential bit - merge response data onto existing data.
-                resolve( Ember.merge( data, updates ) );
-              },
-              function( reason ) {
-                reject( "Failed to save parent in relation: " + reason.errors[0] );
-              }
-            );
-          },
-          function( reason ) {
-            reject( reason.errors[0] );
-          }
-        );
+    // if needed, saves the relations first
+    var send_deletes_promise = null;
+    if (sendDeletes) {
+      send_deletes_promise = adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: deleteds } );
+    }
+    else {
+      send_deletes_promise = Ember.RSVP.Promise.resolve();
+    }
 
-      } else {
-        adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: data } ).then(
-          function( json ) {
-            // This is the essential bit - merge response data onto existing data.
-            resolve( Ember.merge( data, json ) );
-          },
-          function( reason ) {
-            reject( reason.errors[0] );
-          }
-        );
-      }
+    return new Ember.RSVP.Promise( function( resolve, reject ) {
+      send_deletes_promise.then(
+        function() {
+          adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: data } ).then(
+            function( json ) {
+              // This is the essential bit - merge response data onto existing data.
+              resolve( Ember.merge( data, json ) );
+            },
+            function( reason ) {
+              reject( reason.errors[0] );
+            }
+          );
+        },
+        function( reason ) {
+          reject( reason.errors[0] );
+        }
+      );
     });
   },
 
