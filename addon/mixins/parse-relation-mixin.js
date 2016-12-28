@@ -1,0 +1,70 @@
+/**
+* @description Allow model classes to correctly handle relations remove operations
+* @see serializer::serializeHasMany and serializer::serializeAttribute
+*/
+import Ember from "ember";
+
+export default Ember.Mixin.create({
+  _deleted: {}, // contains the pointers of each object to remove for each relation: eg { "relationship1_key": [],  "relationship2_key": [], etc. }
+
+  /**
+  * @function addToRelation
+  * @description Add the given object to the given relation
+  * @param {string} key The name of the relation
+  * @param {object} model The model to add to the relation
+  */
+  addToRelation (key, model) {
+    if (key && model) {
+      this.get(key).pushObject(model);
+
+      // if the added object was previsouly removed, remove it from the list of the items to delete from the relation
+      var deleted = this.get("_deleted");
+      var deleted_items = Ember.A(deleted[key]) || Ember.A([]);
+
+      var items = deleted_items.filterBy("objectId", model.id);
+      deleted_items.removeObjects(items);
+    }
+  },
+
+
+  /**
+  * @function removeFromRelation
+  * @description Removed the given object from the given relation
+  * @param {string} key The name of the relation
+  * @param {object} model The model to remove from the relation
+  */
+  removeFromRelation (key, model) {
+    if (key && model) {
+      var deleted = this.get("_deleted");
+      var className = Ember.String.capitalize(Ember.String.camelize(model.constructor.typeKey));
+
+      deleted[key] = deleted[key] || [];
+
+      deleted[key].push({
+        "__type"    : "Pointer",
+        "className" : className,
+        "objectId"  : model.id
+      });
+    }
+  },
+
+
+  /**
+  * @function didUpdate
+  * @description Definitely remove the deleted models from their relations
+  */
+  didUpdate: function() {
+    var _deleted = this.get("_deleted");
+
+    for (var key in _deleted) {
+      var deleted_items = Ember.A(_deleted[key]);
+
+      for (var i = 0; i < deleted_items.length; i++) {
+        var item = this.get(key).findBy("id", deleted_items[i].objectId);
+        this.get(key).removeObject(item);
+      }
+
+      _deleted[key] = [];
+    }
+  }
+});

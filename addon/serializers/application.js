@@ -238,59 +238,52 @@ export default DS.RESTSerializer.extend({
   */
   serializeHasMany: function( snapshot, json, relationship ) {
     var key   = relationship.key,
-      hasMany = Ember.A(snapshot.hasMany( key )),
+      hasMany = Ember.A(snapshot.hasMany(key)),
       options = relationship.options,
       _this   = this;
 
     if ( hasMany && hasMany.get( "length" ) > 0 ) {
       json[key] = { "objects": [] };
 
-      // an array is not a relationship, right?
-      
-      /*if ( options.relation ) {
-        json[key].__op = 'AddRelation';
+      if ( options.relation ) {
+        json[key].__op = "AddRelation";
       }
 
       if ( options.array ) {
-        json[key].__op = 'AddUnique';
-      }*/
-      
-      json[key].__op = 'AddRelation';
+        json[key].__op = "AddUnique";
+      }
+
+      var deleted_items = Ember.A([]);
+      var _deleted = snapshot.get("_deleted");
+
+      if (_deleted && _deleted[key]) {
+        deleted_items = Ember.A(_deleted[key]);
+      }
 
       hasMany.forEach( function( child ) {
-        json[key].objects.push({
-          '__type'    : 'Pointer',
-          'className' : _this.parseClassName(child.type.modelName),
-          'objectId'  : child.id
-        });
+        var item = deleted_items.findBy("objectId", child.id);
+
+        if (Ember.isEmpty(item)) {
+          json[key].objects.push({
+            "__type"    : "Pointer",
+            "className" : _this.parseClassName(child.type.modelName),
+            "objectId"  : child.id
+          });
+        }
       });
 
-      if ( hasMany._deletedItems && hasMany._deletedItems.length ) {
+      if ( !Ember.isEmpty(deleted_items) ) {
         if ( options.relation ) {
-          var addOperation    = json[key],
-            deleteOperation = { '__op': 'RemoveRelation', 'objects': [] };
+          var addOperation    = json[key];
+          var deleteOperation = { "__op": "RemoveRelation", "objects": deleted_items };
 
-          hasMany._deletedItems.forEach( function( item ) {
-            deleteOperation.objects.push({
-              '__type'    : 'Pointer',
-              'className' : item.type,
-              'objectId'  : item.id
-            });
-          });
-
-          json[key] = { '__op': 'Batch', 'ops': [addOperation, deleteOperation] };
+          json[key]._batch_ops = { "__op": "Batch", "ops": [addOperation, deleteOperation] };
         }
 
+        // Note from parse-server: this is not currently possible to atomically add and remove items from an array
+        // in the same save. You will have to call save in between every different kind of array operation.
         if ( options.array ) {
-          json[key].deleteds = { '__op': 'Remove', 'objects': [] };
-
-          hasMany._deletedItems.forEach( function( item ) {
-            json[key].deleteds.objects.push({
-              '__type'    : 'Pointer',
-              'className' : item.type,
-              'objectId'  : item.id
-            });
-          });
+          json[key]._batch_ops = { "__op": "Remove", "objects": deleted_items };
         }
       }
 

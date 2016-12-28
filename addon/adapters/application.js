@@ -112,8 +112,8 @@ export default DS.RESTAdapter.extend({
   updateRecord: function(store, type, snapshot) {
     var serializer  = store.serializerFor( type.modelName ),
       id          = snapshot.id,
-      sendDeletes = false,
-      deleteds    = {},
+      hasBatchOps = false,
+      batch_ops   = {},
       data        = {},
       adapter     = this;
 
@@ -130,24 +130,24 @@ export default DS.RESTAdapter.extend({
     }
 
     type.eachRelationship(function( key ) {
-      if ( data[key] && data[key].deleteds ) {
-        deleteds[key] = data[key].deleteds;
-        delete data[key].deleteds;
-        sendDeletes = true;
+      if ( data[key] && data[key]._batch_ops ) {
+        batch_ops[key] = data[key]._batch_ops;
+        delete data[key]._batch_ops;
+        hasBatchOps = true;
       }
     });
 
     // if needed, saves the relations first
-    var send_deletes_promise = null;
-    if (sendDeletes) {
-      send_deletes_promise = adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: deleteds } );
+    var batch_ops_promise = null;
+    if (hasBatchOps) {
+      batch_ops_promise = adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: batch_ops } );
     }
     else {
-      send_deletes_promise = Ember.RSVP.Promise.resolve();
+      batch_ops_promise = Ember.RSVP.Promise.resolve();
     }
 
     return new Ember.RSVP.Promise( function( resolve, reject ) {
-      send_deletes_promise.then(
+      batch_ops_promise.then(
         function() {
           adapter.ajax( adapter.buildURL( type.modelName, id ), "PUT", { data: data } ).then(
             function( json ) {
