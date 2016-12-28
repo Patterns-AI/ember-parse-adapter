@@ -4,9 +4,24 @@ import DS from "ember-data";
 export default DS.RESTAdapter.extend({
 
   defaultSerializer: "-parse",
-  host: "https://api.parse.com", // url of the parse-server (here default to Parse.com)
-  namespace: "1", // url prefix of the API (here default to Parse.com used prefix)
+  host: "http://localhost:1337", // url of the parse-server
+  namespace: "parse", // url prefix of the API
 
+  sessionToken: Ember.computed("headers.X-Parse-Session-Token", {
+    get: function get() {
+      return this.get("headers.X-Parse-Session-Token");
+    },
+    set: function set(key, value) {
+      this.set("headers.X-Parse-Session-Token", value);
+      return value;
+    }
+  }),
+
+
+  /**
+  * @function init
+  * @description Set the headers with the good parse-server keys
+  */
   init: function() {
     this._super();
     this.set("headers", {
@@ -15,6 +30,12 @@ export default DS.RESTAdapter.extend({
     });
   },
 
+
+  /**
+  * @function pathForType
+  * @description Overrides ember-data function to build the right URLs
+  * according to the resource we want to access (class, function, etc.)
+  */
   pathForType: function(type) {
     if ("parseUser" === type || "parse-user" === type) {
       return "users";
@@ -39,6 +60,12 @@ export default DS.RESTAdapter.extend({
     }
   },
 
+
+  /**
+   * @function normalizeErrorResponse
+   * @description Overrides ember-data function to build the error object
+   * according to the parse-server error format
+   */
   normalizeErrorResponse: function(status, headers, payload) {
     if (payload && typeof payload === "object" && payload.errors) {
       return payload.errors;
@@ -47,11 +74,13 @@ export default DS.RESTAdapter.extend({
     return [payload];
   },
 
+
   /**
-  * Because Parse doesn't return a full set of properties on the
-  * responses to updates, we want to perform a merge of the response
-  * properties onto existing data so that the record maintains
-  * latest data.
+  * @function createRecord
+  * @description Overrides ember-data function. Because parse-server doesn't
+  * return a full set of properties on the responses to updates, we want to
+  * perform a merge of the response properties onto existing data so that the
+  * record maintains latest data.
   */
   createRecord: function( store, type, snapshot ) {
     var serializer = store.serializerFor( type.modelName ),
@@ -72,11 +101,13 @@ export default DS.RESTAdapter.extend({
     });
   },
 
+
   /**
-  * Because Parse doesn't return a full set of properties on the
-  * responses to updates, we want to perform a merge of the response
-  * properties onto existing data so that the record maintains
-  * latest data.
+  * @function updateRecord
+  * @description Overrides ember-data function. Because parse-server doesn't
+  * return a full set of properties on the responses to updates, we want to
+  * perform a merge of the response properties onto existing data so that the
+  * record maintains latest data.
   */
   updateRecord: function(store, type, snapshot) {
     var serializer  = store.serializerFor( type.modelName ),
@@ -141,9 +172,10 @@ export default DS.RESTAdapter.extend({
 
 
   /**
-   * @function deleteRecord
-   * @description Override deleteRecord to correctly return the error from Parse in case of failure
-   */
+  * @function deleteRecord
+  * @description Overrides ember-data function. Returns the good error object
+  * from parse-server in case of failure.
+  */
   deleteRecord: function (store, type, snapshot) {
     return this._super(store, type, snapshot)["catch"] (
       function(response) {
@@ -153,22 +185,21 @@ export default DS.RESTAdapter.extend({
   },
 
 
-  parseClassName: function ( key ) {
-    return Ember.String.capitalize( key );
-  },
-
   /**
-  * Implementation of a hasMany that provides a Relation query for Parse
-  * objects.
+  * @function findHasMany
+  * @description Overrides ember-data function. Implementation of a hasMany that
+  * provides a Relation query for parse-server objects.
   */
   findHasMany: function( store, snapshot, url, relationship ) {
+    var parseClassName = Ember.String.capitalize( snapshot.modelName );
+
     var relatedInfo_ = JSON.parse( url ),
         query        = {
         where: {
           "$relatedTo": {
             "object": {
               "__type"    : "Pointer",
-              "className" : this.parseClassName( snapshot.modelName ),
+              "className" : parseClassName,
               "objectId"  : snapshot.id
             },
             key: relatedInfo_.key
@@ -182,8 +213,9 @@ export default DS.RESTAdapter.extend({
   },
 
   /**
-  * Implementation of findQuery that automatically wraps query in a
-  * JSON string.
+  * @function query
+  * @description Overrides ember-data function. Implementation of findQuery that
+  * automatically wraps query in a JSON string.
   *
   * @example
   *     this.store.find("comment", {
@@ -211,15 +243,5 @@ export default DS.RESTAdapter.extend({
 
     // Pass to _super()
     return this._super( store, type, _query );
-  },
-
-  sessionToken: Ember.computed("headers.X-Parse-Session-Token", {
-    get: function get() {
-      return this.get("headers.X-Parse-Session-Token");
-    },
-    set: function set(key, value) {
-      this.set("headers.X-Parse-Session-Token", value);
-      return value;
-    }
-  })
+  }
 });
