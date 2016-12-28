@@ -42,7 +42,7 @@ module( "Integration - ember-parse-adapter", {
     container.register( "model:comment", DS.Model.extend({
       position  : DS.attr( "number"),
       content   : DS.attr( "string"),
-      removed_  : DS.attr( "boolean", { defaultValue: false } )
+      _removed  : DS.attr( "boolean", { defaultValue: false } )
     }));
 
     store = container.lookup( "service:store" );
@@ -680,8 +680,8 @@ test("relation", function(assert) {
 
   // remove some comments from a post
   andThen(function() {
-    new_comment1.set("removed_", true);
-    new_comment3.set("removed_", true);
+    new_comment1.set("_removed", true);
+    new_comment3.set("_removed", true);
     post2_author1.save();
   });
 
@@ -749,8 +749,8 @@ test("array", function(assert) {
 
   // remove some unread comments
   andThen(function() {
-    comment3_post3.set("removed_", true);
-    comment6_post5.set("removed_", true);
+    comment3_post3.set("_removed", true);
+    comment6_post5.set("_removed", true);
 
     author2.save();
   });
@@ -819,21 +819,35 @@ test("Save error", function(assert) {
 test("Delete error", function(assert) {
   assert.expect(3);
 
+  // create the author, and set the property to prevent deletion
   andThen(function() {
     Ember.run(function() {
       author1 = createAuthor(0);
       author1.set("deleteMeError", 223);
 
       author1.save().then(function() {
-
-        author1.destroyRecord().catch(function(error) {
-          assert.ok(error && error.error, "custom error returned");
-
-          var error_obj = JSON.parse(error.error);
-          assert.ok(error_obj.code, 223, "error code is good");
-          assert.ok(error_obj.message, "I am raised", "error message is good");
-        });
+        authorIds.push(author1.id);
       });
+    });
+  });
+
+  // try to delete the author and cacth the raised exception
+  andThen(function() {
+    author1.destroyRecord().catch(function(error) {
+      author1.rollbackAttributes();
+      assert.ok(error && error.error, "custom error returned");
+
+      var error_obj = JSON.parse(error.error);
+      assert.ok(error_obj.code, 223, "error code is good");
+      assert.ok(error_obj.message, "I am raised", "error message is good");
+    });
+  });
+
+  // remove the property that prevents the author to be deleted
+  andThen(function() {
+    Ember.run(function() {
+      author1.set("deleteMeError", 0);
+      author1.save();
     });
   });
 });
