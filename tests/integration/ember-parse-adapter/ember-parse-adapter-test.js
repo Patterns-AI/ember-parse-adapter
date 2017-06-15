@@ -25,6 +25,7 @@ module( "Integration - ember-parse-adapter", {
       position        : DS.attr( "number"),
       firstName       : DS.attr( "string"),
       lastName        : DS.attr( "string"),
+      address         : DS.attr( "parse-object"),
       updateMe        : DS.attr( "boolean", { defaultValue: false } ), // used to test merge operations of the adapter
       saveMeError     : DS.attr( "number", { defaultValue: 0 } ), // used to test error on operations on the adapter
       deleteMeError   : DS.attr( "number", { defaultValue: 0 } ), // used to test error on operations on the adapter
@@ -96,32 +97,33 @@ var post1_author1, post2_author1, post3_author2, post4_author2, post5_author2;
 var comment1_post1, comment2_post1, comment3_post3, comment4_post5, comment5_post5, comment6_post5;
 
 var authors_data = [
-  {position: 0, firstName: "John", lastName: "Doe"},
-  {position: 1, firstName: "William", lastName: "Johnson"}
+  { position: 0, firstName: "John", lastName: "Doe", address: { street: "Oakdale", number: 1690, city: "San Francisco", point: [40.761890, -74.244426] } },
+  { position: 1, firstName: "William", lastName: "Johnson", address: { street: "Hillside", number: 420, city: "New York", point: [37.735513, -122.391997] } }
 ];
 
 var posts_data = [
-  {position: 0, title: "Goodbye Parse.com", date: "2016-01-28T00:00:00.000Z", image: "somewhere.jpg"},
-  {position: 1, title: "Forum rules", date: "2016-02-04T00:00:00.000Z", image: "over.jpg"},
-  {position: 2, title: "How to use Ember", date: "2016-02-05T00:00:00.000Z", image: "the.jpg"},
-  {position: 3, title: "Ember Data releases", date: "2016-02-29T00:00:00.000Z", image: "rainbow.jpg"},
-  {position: 4, title: "Deploy MongoDB on AWS", date: "2016-03-09T00:00:00.000Z", image: "WayUpHigh.jpg"}
+  { position: 0, title: "Goodbye Parse.com", date: "2016-01-28T00:00:00.000Z", image: "somewhere.jpg" },
+  { position: 1, title: "Forum rules", date: "2016-02-04T00:00:00.000Z", image: "over.jpg" },
+  { position: 2, title: "How to use Ember", date: "2016-02-05T00:00:00.000Z", image: "the.jpg" },
+  { position: 3, title: "Ember Data releases", date: "2016-02-29T00:00:00.000Z", image: "rainbow.jpg" },
+  { position: 4, title: "Deploy MongoDB on AWS", date: "2016-03-09T00:00:00.000Z", image: "WayUpHigh.jpg" }
 ];
 
 var comments_data = [
-  {position: 0, content: "Lörém îpsùm dolor sit àmèt, consectetur adipiscing elit.\nQuisque elementum purus sapien."},
-  {position: 1, content: "Fusce eget diam erat."},
-  {position: 2, content: "Nam malesuada magna lacus, at placerat libero viverra at."},
-  {position: 3, content: "Donec eu ante ultrices, accumsan erat vitae, dictum turpis."},
-  {position: 4, content: "Etiam at gravida nibh. Vivamus sed volutpat augue.\nNullam blandit eget justo sed tincidunt."},
-  {position: 5, content: "In fermentum vehicula odio at pharetra."}
+  { position: 0, content: "Lörém îpsùm dolor sit àmèt, consectetur adipiscing elit.\nQuisque elementum purus sapien." },
+  { position: 1, content: "Fusce eget diam erat." },
+  { position: 2, content: "Nam malesuada magna lacus, at placerat libero viverra at." },
+  { position: 3, content: "Donec eu ante ultrices, accumsan erat vitae, dictum turpis." },
+  { position: 4, content: "Etiam at gravida nibh. Vivamus sed volutpat augue.\nNullam blandit eget justo sed tincidunt." },
+  { position: 5, content: "In fermentum vehicula odio at pharetra." }
 ];
 
 var createAuthor = function(position) {
   return store.createRecord("author", {
     position: position,
     firstName: authors_data[position].firstName,
-    lastName: authors_data[position].lastName
+    lastName: authors_data[position].lastName,
+    address: authors_data[position].address
   });
 };
 
@@ -229,7 +231,7 @@ var insertData = function() {
  * @description create
  */
 test("create", function(assert) {
-  assert.expect(67);
+  assert.expect(75);
 
   // there is nothing into the database
   andThen(function() {
@@ -269,6 +271,10 @@ test("create", function(assert) {
           assert.equal(authors[i].position, authors_data[i].position, "author position saved - " + i);
           assert.equal(authors[i].firstName, authors_data[i].firstName, "author firstName saved - " + i);
           assert.equal(authors[i].lastName, authors_data[i].lastName, "author lastName saved - " + i);
+          assert.equal(authors[i].address.street, authors_data[i].address.street, "author street address saved - " + i);
+          assert.equal(authors[i].address.number, authors_data[i].address.number, "author number address saved - " + i);
+          assert.equal(authors[i].address.city, authors_data[i].address.city, "author city address saved - " + i);
+          assert.deepEqual(authors[i].address.point, authors_data[i].address.point, "author point address saved - " + i);
         }
 
         assert.equal(authors[0].unreadComments.length, 1, "author1 unread comments length");
@@ -330,7 +336,7 @@ test("create", function(assert) {
  * @description create - merge
  */
 test("create - merge", function(assert) {
-  assert.expect(6);
+  assert.expect(8);
 
   // update some data and save them
   andThen(function() {
@@ -338,6 +344,7 @@ test("create - merge", function(assert) {
 
     author1.set("firstName", "Jane");
     author1.set("lastName", "Dawson");
+    author1.set("address.city", "Washington");
     author1.set("updateMe", true);
     author1.save();
   });
@@ -349,10 +356,12 @@ test("create - merge", function(assert) {
       getData(adapter, "Author", { where: {objectId: author1.id} }).then(function(response) {
         assert.equal(response.results[0].firstName, "Jane", "author firstName saved");
         assert.equal(response.results[0].lastName, "Dawson - updated", "author lastName saved");
+        assert.equal(response.results[0].address.city, "Washington", "address - updated", "author city address saved");
         assert.equal(response.results[0].updateMe, false, "author updateMe saved");
 
         assert.equal(author1.get("firstName"), "Jane", "author firstName merged");
         assert.equal(author1.get("lastName"), "Dawson - updated", "author lastName merged");
+        assert.equal(author1.get("address.city"), "Washington", "author city address merged");
         assert.equal(author1.get("updateMe"), false, "author updatedMe merged");
       });
     });
@@ -364,7 +373,7 @@ test("create - merge", function(assert) {
  * @description update
  */
 test("update", function(assert) {
-  assert.expect(6);
+  assert.expect(7);
 
   // create the data
   insertData();
@@ -373,6 +382,7 @@ test("update", function(assert) {
   andThen(function() {
     author1.set("firstName", "Jane");
     author1.set("lastName", "Dawson");
+    author1.set("address.city", "Washington");
     author1.save();
 
     post3_author2.set("title", "That's all folks!");
@@ -388,6 +398,7 @@ test("update", function(assert) {
       getData(adapter, "Author", { where: {objectId: author1.id} }).then(function(response) {
         assert.equal(response.results[0].firstName, "Jane", "author firstName saved");
         assert.equal(response.results[0].lastName, "Dawson", "author lastName saved");
+        assert.equal(response.results[0].address.city, "Washington", "author city address saved");
       });
 
       getData(adapter, "Post", { where: {objectId: post3_author2.id} }).then(function(response) {
@@ -408,7 +419,7 @@ test("update", function(assert) {
  * @description update - merge
  */
 test("update - merge", function(assert) {
-  assert.expect(6);
+  assert.expect(8);
 
   // create the data
   insertData();
@@ -417,6 +428,7 @@ test("update - merge", function(assert) {
   andThen(function() {
     author1.set("firstName", "Jane");
     author1.set("lastName", "Dawson");
+    author1.set("address.city", "Washington");
     author1.set("updateMe", true);
     author1.save();
   });
@@ -426,10 +438,12 @@ test("update - merge", function(assert) {
       getData(adapter, "Author", { where: {objectId: author1.id} }).then(function(response) {
         assert.equal(response.results[0].firstName, "Jane", "author firstName saved");
         assert.equal(response.results[0].lastName, "Dawson - updated", "author lastName saved");
+        assert.equal(response.results[0].address.city, "Washington", "author city address saved");
         assert.equal(response.results[0].updateMe, false, "author updateMe saved");
 
         assert.equal(author1.get("firstName"), "Jane", "author firstName merged");
         assert.equal(author1.get("lastName"), "Dawson - updated", "author lastName merged");
+        assert.equal(author1.get("address.city"), "Washington", "author city address merged");
         assert.equal(author1.get("updateMe"), false, "author updatedMe merged");
       });
     });
