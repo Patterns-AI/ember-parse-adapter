@@ -28,7 +28,7 @@ Is stored at the special user endpoint at parse-server.
 
 ##### EmberParseAdapter.Transforms
 
-* Provides transforms for date, file and geo types at parse-server.
+* Provides transforms for date, file, object and geo types at parse-server.
 
 ## Get started
 
@@ -67,6 +67,8 @@ App.Post = DS.Model.extend({
   avatar: DS.attr('parse-file'),
   // There is a parse-date transform, but sometimes dates are just strings
   updatedAt: DS.attr('parse-date'),
+  // There is parse-object transform
+  properties: DS.attr('parse-object'),
   // ALWAYS refer to relationships as async, for now.
   user: DS.belongsTo('parse-user', {async: true})
 });
