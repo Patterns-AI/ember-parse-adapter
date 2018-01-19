@@ -37,7 +37,7 @@ export default DS.RESTAdapter.extend({
   * according to the resource we want to access (class, function, etc.)
   */
   pathForType: function(type) {
-    if ( 'parseUser' === key || 'parse-user' === key) {
+    if ( 'parseUser' === type || 'parse-user' === type) {
       return "users";
     }
     else if ("requestPasswordReset" === type) {
